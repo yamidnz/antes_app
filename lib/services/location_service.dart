@@ -31,9 +31,7 @@ class LocationService {
   }) async {
     try {
       return await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.best,
-        ),
+        desiredAccuracy: LocationAccuracy.best,
       ).timeout(timeout);
     } catch (_) {
       final last = await Geolocator.getLastKnownPosition();
