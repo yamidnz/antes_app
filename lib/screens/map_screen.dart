@@ -28,6 +28,7 @@ class _MapScreenState extends State<MapScreen> {
   Position? _position;
   List<SafeZone> _zones = [];
   bool _loading = true;
+  bool _zonesError = false;
   String? _error;
 
   @override
@@ -40,15 +41,27 @@ class _MapScreenState extends State<MapScreen> {
     setState(() { _loading = true; _error = null; });
     final ok = await _locationService.ensurePermission();
     if (!ok) {
-      setState(() { _loading = false; _error = 'Activa el permiso de ubicación para ver zonas seguras cercanas.'; });
+      setState(() { _loading = false; _error = 'Activa el permiso de ubicación (y el GPS del sistema) para ver zonas seguras cercanas.'; });
       return;
     }
+
+    Position pos;
     try {
-      final pos = await _locationService.getPreciseLocation();
-      final zones = await _fetchSafeZones(pos.latitude, pos.longitude);
-      setState(() { _position = pos; _zones = zones; _loading = false; });
+      pos = await _locationService.getPreciseLocation(timeout: const Duration(seconds: 20));
     } catch (e) {
-      setState(() { _loading = false; _error = 'No se pudo obtener tu ubicación o las zonas cercanas.'; });
+      setState(() { _loading = false; _error = 'No pudimos obtener tu ubicación GPS. Verifica que el GPS esté activado y que tengas buena señal (prueba cerca de una ventana o al aire libre).'; });
+      return;
+    }
+
+    setState(() { _position = pos; });
+
+    try {
+      final zones = await _fetchSafeZones(pos.latitude, pos.longitude);
+      setState(() { _zones = zones; _loading = false; });
+    } catch (e) {
+      // Ya tenemos la ubicación: mostramos el mapa igual, solo avisamos
+      // que no se pudieron cargar las zonas (probable falta de internet).
+      setState(() { _zones = []; _loading = false; _error = null; _zonesError = true; });
     }
   }
 
@@ -145,7 +158,25 @@ class _MapScreenState extends State<MapScreen> {
           ),
         ),
         Expanded(
-          child: _zones.isEmpty
+          child: _zonesError
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'Tenemos tu ubicación, pero no pudimos cargar las zonas seguras cercanas. Revisa tu conexión a internet.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: AppColors.dim),
+                        ),
+                        const SizedBox(height: 12),
+                        OutlinedButton(onPressed: _load, child: const Text('Reintentar')),
+                      ],
+                    ),
+                  ),
+                )
+              : _zones.isEmpty
               ? const Center(child: Text('No encontramos espacios abiertos catalogados cerca.', style: TextStyle(color: AppColors.dim)))
               : ListView.separated(
                   padding: const EdgeInsets.all(16),
