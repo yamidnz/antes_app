@@ -24,6 +24,7 @@ class QuakeService {
       if (lon > -82 && lon < -66 && lat > -4.5 && lat < 13.5) {
         final props = f['properties'] as Map<String, dynamic>;
         quakes.add(Quake(
+          id: f['id'] as String? ?? '$lat,$lon,${props['time']}',
           mag: (props['mag'] as num?)?.toDouble() ?? 0,
           place: props['place'] as String? ?? 'Ubicación desconocida',
           time: DateTime.fromMillisecondsSinceEpoch(props['time'] as int),

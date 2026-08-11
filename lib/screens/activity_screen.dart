@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import '../models/quake.dart';
+import '../services/alert_settings_repository.dart';
+import '../services/background_service.dart';
 import '../services/compass_utils.dart';
 import '../services/location_service.dart';
 import '../services/quake_service.dart';
 import '../theme/app_theme.dart';
+import 'quake_detail_screen.dart';
 import 'report_screen.dart';
 
 class ActivityScreen extends StatefulWidget {
@@ -36,6 +39,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
       final hasPermission = await _locationService.ensurePermission();
       if (hasPermission) {
         _userPos = await _locationService.getPreciseLocation(timeout: const Duration(seconds: 8));
+        await AlertSettingsRepository().saveLastKnownLocation(_userPos!.latitude, _userPos!.longitude);
       }
     } catch (_) {
       _userPos = null;
@@ -44,6 +48,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
     try {
       final quakes = await _quakeService.fetchColombiaQuakes();
       setState(() { _quakes = quakes; _loading = false; });
+      // Dispara notificaciones al toque si detecta sismos nuevos, sin
+      // esperar al próximo ciclo de 15 min en segundo plano.
+      checkForNewQuakesAndNotify().catchError((_) => 0);
     } catch (_) {
       setState(() { _quakes = []; _loading = false; });
     }
@@ -152,7 +159,10 @@ class _ActivityScreenState extends State<ActivityScreen> {
       distLabel = '${dist.toStringAsFixed(0)} km de tu ubicación (${CompassUtils.label(bearing)} ${CompassUtils.arrow(bearing)})';
     }
 
-    return Container(
+    return InkWell(
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => QuakeDetailScreen(quake: q))),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: AppColors.card,
@@ -211,6 +221,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
             ),
           ),
         ],
+      ),
       ),
     );
   }
