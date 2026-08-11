@@ -23,13 +23,10 @@ jobs:
       - name: Generar plataforma Android
         run: flutter create --platforms=android .
 
-      - name: Agregar permisos necesarios (ubicación, notificaciones, internet)
+      - name: Agregar permisos necesarios (ubicación e internet)
         run: |
           MANIFEST=android/app/src/main/AndroidManifest.xml
-          sed -i '/<manifest /a\    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>\n    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>\n    <uses-permission android:name="android.permission.WAKE_LOCK"/>' "$MANIFEST"
-
-      - name: Habilitar core library desugaring (lo requiere flutter_local_notifications)
-        run: python3 scripts/patch_gradle_desugaring.py
+          sed -i '/<manifest /a\    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>\n    <uses-permission android:name="android.permission.INTERNET"/>' "$MANIFEST"
 
       - name: Instalar dependencias
         run: flutter pub get
