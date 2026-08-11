@@ -151,7 +151,7 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                 ),
                 const SizedBox(height: 4),
                 const Text(
-                  'ANTES revisa el feed sísmico en segundo plano cada ~15 minutos (es el mínimo que permite Android) y te avisa si hay un sismo dentro del radio que definas. No es una alerta instantánea de segundos — eso requiere una red de sensores dedicada, que está en el roadmap.',
+                  'ANTES revisa el feed sísmico cada vez que abres la app (Inicio o Actividad) y te avisa si hay un sismo dentro del radio que definas. No es una alerta instantánea de segundos ni funciona con la app cerrada — eso requiere una red de sensores dedicada o notificaciones push desde un servidor, que están en el roadmap.',
                   style: TextStyle(fontSize: 11.5, color: AppColors.dim, height: 1.5),
                 ),
                 const SizedBox(height: 16),

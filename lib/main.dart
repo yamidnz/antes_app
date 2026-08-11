@@ -43,9 +43,9 @@ class _AntesAppState extends State<AntesApp> {
 
     await NotificationService().requestPermission();
 
-    // No bloqueamos el arranque de la UI si esto falla (por ejemplo en
-    // dispositivos con restricciones agresivas de batería).
-    BackgroundService().initializeAndSchedule().catchError((_) {});
+    // Sin background real (ver nota en background_service.dart): revisamos
+    // sismos nuevos aquí, al arrancar la app.
+    checkForNewQuakesAndNotify().catchError((_) => 0);
   }
 
   void _openQuakeFromPayload(String payload) {
