@@ -68,17 +68,30 @@ class _MapScreenState extends State<MapScreen> {
   // La distancia real se calcula con Geolocator.distanceBetween (más abajo),
   // que usa una fórmula geodésica correcta — no hace falta reimplementarla.
 
-  Future<List<SafeZone>> _fetchSafeZones(double lat, double lon) async {
-    final query = '[out:json][timeout:15];'
-        '(node["leisure"="park"](around:1800,$lat,$lon);'
-        'way["leisure"="park"](around:1800,$lat,$lon);'
-        'node["leisure"="pitch"](around:1800,$lat,$lon);'
-        'node["amenity"="marketplace"](around:1800,$lat,$lon););'
-        'out center 12;';
-    final res = await http
-        .post(Uri.parse('https://overpass-api.de/api/interpreter'), body: query)
-        .timeout(const Duration(seconds: 15));
-    final data = jsonDecode(res.body) as Map<String, dynamic>;
+  // Varios espejos de Overpass: el servidor principal (overpass-api.de) se
+  // satura o cae con frecuencia. Si uno falla, probamos el siguiente antes
+  // de rendirnos.
+  static const _overpassMirrors = [
+    'https://overpass-api.de/api/interpreter',
+    'https://overpass.kumi.systems/api/interpreter',
+    'https://overpass.openstreetmap.ru/api/interpreter',
+  ];
+
+  String _buildQuery(double lat, double lon, int radiusM) {
+    return '[out:json][timeout:20];'
+        '(node["leisure"="park"](around:$radiusM,$lat,$lon);'
+        'way["leisure"="park"](around:$radiusM,$lat,$lon);'
+        'node["leisure"="pitch"](around:$radiusM,$lat,$lon);'
+        'way["leisure"="recreation_ground"](around:$radiusM,$lat,$lon);'
+        'node["amenity"="marketplace"](around:$radiusM,$lat,$lon);'
+        'node["place"="square"](around:$radiusM,$lat,$lon);'
+        'way["place"="square"](around:$radiusM,$lat,$lon);'
+        'node["amenity"="school"](around:$radiusM,$lat,$lon););'
+        'out center 20;';
+  }
+
+  List<SafeZone> _parseZones(String body, double lat, double lon) {
+    final data = jsonDecode(body) as Map<String, dynamic>;
     final elements = (data['elements'] as List<dynamic>);
     final zones = <SafeZone>[];
     for (final el in elements) {
@@ -86,14 +99,47 @@ class _MapScreenState extends State<MapScreen> {
       final zlat = (el['lat'] ?? el['center']?['lat']) as num?;
       final zlon = (el['lon'] ?? el['center']?['lon']) as num?;
       if (zlat == null || zlon == null) continue;
-      final name = tags['name'] as String? ??
-          (tags['leisure'] == 'park' ? 'Parque sin nombre' : tags['amenity'] == 'marketplace' ? 'Plaza de mercado' : 'Espacio abierto');
-      final type = tags['leisure'] == 'park' ? 'Parque' : tags['leisure'] == 'pitch' ? 'Cancha abierta' : 'Plaza / mercado';
+      String type;
+      if (tags['leisure'] == 'park') {
+        type = 'Parque';
+      } else if (tags['leisure'] == 'pitch' || tags['leisure'] == 'recreation_ground') {
+        type = 'Cancha / zona deportiva abierta';
+      } else if (tags['amenity'] == 'marketplace') {
+        type = 'Plaza de mercado';
+      } else if (tags['place'] == 'square') {
+        type = 'Plaza';
+      } else if (tags['amenity'] == 'school') {
+        type = 'Institución educativa (patio abierto)';
+      } else {
+        type = 'Espacio abierto';
+      }
+      final name = tags['name'] as String? ?? type;
       final dist = Geolocator.distanceBetween(lat, lon, zlat.toDouble(), zlon.toDouble()) / 1000.0;
       zones.add(SafeZone(name: name, type: type, lat: zlat.toDouble(), lon: zlon.toDouble(), distanceKm: dist));
     }
     zones.sort((a, b) => a.distanceKm.compareTo(b.distanceKm));
-    return zones.take(8).toList();
+    return zones;
+  }
+
+  Future<List<SafeZone>> _fetchSafeZones(double lat, double lon) async {
+    // Radio de búsqueda progresivo: si no hay nada catalogado cerca,
+    // ampliamos antes de rendirnos.
+    for (final radius in [1800, 3500, 6000]) {
+      final query = _buildQuery(lat, lon, radius);
+      for (final mirror in _overpassMirrors) {
+        try {
+          final res = await http
+              .post(Uri.parse(mirror), body: {'data': query})
+              .timeout(const Duration(seconds: 18));
+          if (res.statusCode != 200) continue;
+          final zones = _parseZones(res.body, lat, lon);
+          if (zones.isNotEmpty) return zones.take(10).toList();
+        } catch (_) {
+          continue; // probamos el siguiente espejo
+        }
+      }
+    }
+    return [];
   }
 
   @override
@@ -177,7 +223,23 @@ class _MapScreenState extends State<MapScreen> {
                   ),
                 )
               : _zones.isEmpty
-              ? const Center(child: Text('No encontramos espacios abiertos catalogados cerca.', style: TextStyle(color: AppColors.dim)))
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'No encontramos espacios abiertos catalogados en un radio de 6 km (buscamos parques, plazas, canchas y colegios en OpenStreetMap). Puede que tu zona aún no esté mapeada.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: AppColors.dim, fontSize: 12.5, height: 1.5),
+                        ),
+                        const SizedBox(height: 12),
+                        OutlinedButton(onPressed: _load, child: const Text('Reintentar')),
+                      ],
+                    ),
+                  ),
+                )
               : ListView.separated(
                   padding: const EdgeInsets.all(16),
                   itemCount: _zones.length,

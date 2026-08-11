@@ -42,6 +42,7 @@ class _RootNavState extends State<RootNav> {
         onGoMap: () => _goTo(1),
         onGoTips: () => _goTo(2),
         onGoSos: () => _goTo(4),
+        onGoActivity: () => _goTo(3),
       ),
       const MapScreen(),
       const TipsScreen(),
